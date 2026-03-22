@@ -14,7 +14,7 @@ except Exception as e:
     st.error(f"❌ 讀取金鑰時發生錯誤：{e}")
     st.stop()
 
-st.set_page_config(page_title="亮知識 Lumi 7.6 - 終極穩定版", page_icon="💡", layout="wide")
+st.set_page_config(page_title="亮知識 Lumi 7.7 - 穩定版", page_icon="💡", layout="wide")
 
 # --- 2. 介面美化 ---
 st.markdown("""
@@ -25,8 +25,8 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("💡 亮知識 Lumi - 短影音腳本工具箱 7.6")
-st.caption("修復模型 404 錯誤 | 全域指令優化 | 自動模型選擇")
+st.title("💡 亮知識 Lumi - 短影音腳本工具箱 7.7")
+st.caption("穩定模型路徑 | 電影級指令優化")
 
 # --- 3. 側邊欄與輸入 ---
 with st.sidebar:
@@ -44,19 +44,14 @@ if submit_button:
         st.error("⚠️ 請完整填寫主題與主角名稱！")
     else:
         try:
-            # --- 核心修復：使用通用模型名稱 ---
-            model = genai.GenerativeModel("gemini-1.5-flash-latest")
+            # --- 核心修改：使用最標準的模型代碼 ---
+            # 拿掉 -latest，直接使用標準名稱
+            model = genai.GenerativeModel("gemini-1.5-flash")
             
             prompt = f"""
             你是一位視覺特效導演與短影音專家，頻道名稱『亮知識』。
             主題：{topic}，主角：{animal}。
-            
-            請嚴格依照以下結構生成：
-            1. [旁白]：20秒分四段，語氣活潑。
-            2. [Grok指令]：超詳細電影感中文影片指令（300字）。
-            3. [Imagen提示詞]：高品質英文繪圖提示詞。
-            
-            格式請用標籤區分：[旁白]、[Grok指令]、[Imagen提示詞]。
+            請嚴格依照標籤結構生成：[旁白]、[Grok指令]、[Imagen提示詞]。
             """
             
             with st.spinner("Lumi 正在精密構建中..."):
@@ -72,19 +67,28 @@ if submit_button:
                 col1, col2 = st.columns([1, 1.3])
                 with col1:
                     st.subheader("🎙️ 20秒分秒對位旁白")
-                    narration = res_text.split("[Grok指令]")[0].replace("[旁白]", "").strip()
-                    st.text_area("錄音稿：", value=narration, height=450)
+                    try:
+                        narration = res_text.split("[Grok指令]")[0].replace("[旁白]", "").strip()
+                        st.text_area("錄音稿：", value=narration, height=450)
+                    except:
+                        st.write(res_text) # 如果解析失敗，顯示原始文字
 
                 with col2:
                     st.subheader("🎬 Grok 極致詳細影片指令")
-                    grok_script = res_text.split("[Grok指令]")[1].split("[Imagen提示詞]")[0].strip()
-                    st.code(grok_script, language="text")
+                    try:
+                        grok_parts = res_text.split("[Grok指令]")
+                        grok_script = grok_parts[1].split("[Imagen提示詞]")[0].strip()
+                        st.code(grok_script, language="text")
+                    except:
+                        st.write("請重新點擊生成。")
 
                     st.divider()
                     st.subheader("🖼️ 劇照英文提示詞")
-                    img_prompt = res_text.split("[Imagen提示詞]")[1].strip()
-                    st.code(img_prompt, language="text")
+                    try:
+                        img_prompt = res_text.split("[Imagen提示詞]")[1].strip()
+                        st.code(img_prompt, language="text")
+                    except:
+                        st.write("提示詞解析中...")
 
         except Exception as e:
-            # 輔助偵測錯誤內容
-            st.error(f"❌ 生成失敗，可能是模型名稱或配額問題：{e}")
+            st.error(f"❌ 發生錯誤：{e}")
