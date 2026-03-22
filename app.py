@@ -4,43 +4,83 @@ from PIL import Image
 
 # --- 1. 安全設定 ---
 if "GEMINI_API_KEY" in st.secrets:
-    MY_API_KEY = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=MY_API_KEY)
+    # 這裡會讀取你在 Streamlit 後台設定的新金鑰
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 else:
-    st.error("❌ Secrets 裡找不到 GEMINI_API_KEY！")
+    st.error("🔑 請在 Secrets 設定 GEMINI_API_KEY")
     st.stop()
 
-st.set_page_config(page_title="亮知識 Lumi 8.1", page_icon="💡", layout="wide")
+st.set_page_config(page_title="亮知識 Lumi 8.2", page_icon="💡", layout="wide")
 
-# --- 2. 側邊欄 ---
+# --- 2. 介面美化 ---
+st.markdown("""
+    <style>
+    .stButton>button { width: 100%; border-radius: 12px; height: 3.5em; background: linear-gradient(45deg, #FFD700, #FFA500); color: black; font-weight: bold; border: none; }
+    .stCodeBlock { background-color: #0E1117 !important; border: 1px solid #FFD700 !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.title("💡 亮知識 Lumi - 短影音腳本 8.2")
+st.caption("強制模型更新版本 | 解決 404 報錯")
+
+# --- 3. 側邊欄 ---
 with st.sidebar:
     st.header("✨ 創作設定")
-    topic = st.text_input("影片主題", placeholder="例如：水豚的秘密")
-    animal = st.text_input("主角", placeholder="水豚")
-    submit = st.button("🚀 開始生成")
+    with st.form("lumi_form"):
+        topic = st.text_input("影片主題", placeholder="例如：水豚為什麼愛泡溫泉？")
+        animal = st.text_input("主角名稱", placeholder="水豚")
+        st.divider()
+        uploaded_file = st.file_uploader("參考圖 (選填)", type=["jpg", "jpeg", "png"])
+        submit_button = st.form_submit_button("🚀 生成腳本")
 
-# --- 3. 生成邏輯 ---
-if submit:
+# --- 4. 生成邏輯 ---
+if submit_button:
     if not topic or not animal:
-        st.warning("請填寫主題與主角！")
+        st.error("⚠️ 請填寫完整主題與主角！")
     else:
-        # 嘗試清單：從最新到最穩
-        models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
-        success = False
-        
-        for m_name in models_to_try:
-            try:
-                model = genai.GenerativeModel(m_name)
-                with st.spinner(f"正在嘗試連線 {m_name}..."):
-                    response = model.generate_content(f"請用中文介紹{animal}的{topic}，並給出[旁白]、[Grok指令]、[Imagen提示詞]結構。")
-                    st.success(f"✅ 連線成功！使用模型：{m_name}")
-                    st.write(response.text)
-                    success = True
-                    break
-            except Exception as e:
-                last_error = str(e)
-                continue
-        
-        if not success:
-            st.error(f"❌ 嘗試所有模型均失敗。最後一個錯誤訊息：{last_error}")
-            st.info("💡 如果訊息包含 'API key not found'，請檢查 Secrets 拼字；如果是 '403'，請重新申請金鑰。")
+        # 強制使用目前最新且支援的 1.5 系列模型名稱
+        # 不再使用舊的 gemini-pro (這是 404 的主因)
+        try:
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            
+            prompt = f"""
+            你是一位專業短影音導演，頻道『亮知識』。
+            主題：{topic}，主角：{animal}。
+            請產出標籤結構：[旁白]、[Grok指令]、[Imagen提示詞]。
+            """
+            
+            with st.spinner("Lumi 正在連線最新 1.5 模型..."):
+                if uploaded_file:
+                    img = Image.open(uploaded_file)
+                    response = model.generate_content([prompt, img])
+                else:
+                    response = model.generate_content(prompt)
+                
+                res_text = response.text
+                st.success("✅ 1.5 模型連線成功！")
+
+                # 顯示結果
+                col1, col2 = st.columns([1, 1.3])
+                with col1:
+                    st.subheader("🎙️ 20秒旁白")
+                    try:
+                        narration = res_text.split("[Grok指令]")[0].replace("[旁白]", "").strip()
+                        st.text_area("稿件：", value=narration, height=400)
+                    except:
+                        st.write(res_text)
+
+                with col2:
+                    st.subheader("🎬 生成指令")
+                    try:
+                        grok_script = res_text.split("[Grok指令]")[1].split("[Imagen提示詞]")[0].strip()
+                        st.code(grok_script, language="text")
+                        
+                        st.divider()
+                        img_prompt = res_text.split("[Imagen提示詞]")[1].strip()
+                        st.code(img_prompt, language="text")
+                    except:
+                        st.info("格式解析稍有偏差，請參考左側完整內容。")
+
+        except Exception as e:
+            st.error(f"❌ 發生錯誤：{e}")
+            st.info("如果還是報 404，請檢查 Google AI Studio 是否有產生一把『新的』金鑰。")
