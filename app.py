@@ -14,7 +14,7 @@ except Exception as e:
     st.error(f"❌ 讀取金鑰時發生錯誤：{e}")
     st.stop()
 
-st.set_page_config(page_title="亮知識 Lumi 7.8 - 穩定修復版", page_icon="💡", layout="wide")
+st.set_page_config(page_title="亮知識 Lumi 7.9 - 萬用版", page_icon="💡", layout="wide")
 
 # --- 2. 介面美化 ---
 st.markdown("""
@@ -25,14 +25,14 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("💡 亮知識 Lumi - 短影音腳本工具箱 7.8")
-st.caption("自動修正模型路徑 | 旁白分區優化")
+st.title("💡 亮知識 Lumi - 短影音腳本工具箱 7.9")
+st.caption("自動選擇最穩定模型 | 支援 1.5 Flash")
 
 # --- 3. 側邊欄與輸入 ---
 with st.sidebar:
     st.header("✨ 創作設定")
     with st.form("lumi_form"):
-        topic = st.text_input("影片主題", placeholder="例如：水豚為什麼愛泡溫泉？")
+        topic = st.text_input("影片主題", placeholder="例如：水豚的社交禮儀")
         animal = st.text_input("影片主角", placeholder="例如：水豚")
         st.divider()
         uploaded_file = st.file_uploader("上傳參考圖", type=["jpg", "jpeg", "png"])
@@ -44,20 +44,13 @@ if submit_button:
         st.error("⚠️ 請完整填寫主題與主角！")
     else:
         try:
-            # --- 修正重點：使用更通用的名稱 ---
-            model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+            # --- 核心改動：萬用模型選擇邏輯 ---
+            # 有些環境需要 "models/" 前綴，有些不需要，這裡直接嘗試最標準的寫法
+            model = genai.GenerativeModel("gemini-1.5-flash")
             
-            prompt = f"""
-            你是一位專業的短影音導演。
-            主題：{topic}，主角：{animal}。
-            請產出：
-            1. [旁白]：20秒中文腳本（分四段）。
-            2. [Grok指令]：300字電影級中文影片生成指令。
-            3. [Imagen提示詞]：英文繪圖提示詞。
-            格式：請務必包含標籤 [旁白]、[Grok指令]、[Imagen提示詞]。
-            """
+            prompt = f"你是導演，主題：{topic}，主角：{animal}。請產出標籤結構：[旁白]、[Grok指令]、[Imagen提示詞]。"
             
-            with st.spinner("Lumi 正在精密運算中..."):
+            with st.spinner("Lumi 正在精密連線中..."):
                 if uploaded_file:
                     img = Image.open(uploaded_file)
                     response = model.generate_content([prompt, img])
@@ -67,30 +60,29 @@ if submit_button:
                 res_text = response.text
                 st.success("✅ 生成成功！")
 
-                # 分欄顯示
+                # 顯示結果
                 col1, col2 = st.columns([1, 1.2])
-                
                 with col1:
-                    st.subheader("🎙️ 20秒旁白稿")
-                    if "[旁白]" in res_text:
-                        narration = res_text.split("[旁白]")[1].split("[Grok指令]")[0].strip()
-                        st.text_area("錄音用：", value=narration, height=400)
-                    else:
-                        st.write(res_text)
-
+                    st.subheader("🎙️ 20秒旁白")
+                    st.text_area("稿件內容：", value=res_text.split("[Grok指令]")[0].replace("[旁白]", "").strip(), height=400)
                 with col2:
-                    st.subheader("🎬 Grok 影片指令")
-                    if "[Grok指令]" in res_text:
-                        grok_script = res_text.split("[Grok指令]")[1].split("[Imagen提示詞]")[0].strip()
-                        st.code(grok_script, language="text")
-                    
+                    st.subheader("🎬 指令區")
+                    st.code(res_text.split("[Grok指令]")[1].split("[Imagen提示詞]")[0].strip())
                     st.divider()
-                    st.subheader("🖼️ Imagen 提示詞")
-                    if "[Imagen提示詞]" in res_text:
-                        img_p = res_text.split("[Imagen提示詞]")[1].strip()
-                        st.code(img_p, language="text")
+                    st.code(res_text.split("[Imagen提示詞]")[1].strip())
 
         except Exception as e:
-            # 如果還是報錯，給出具體建議
-            st.error(f"❌ 偵測到環境異常：{e}")
-            st.info("💡 提示：這通常是 API 版本同步問題，請稍候 1 分鐘重試，或檢查 Secrets 是否填寫正確。")
+            # 如果失敗，嘗試自動切換模型名稱 (有些舊版 SDK 需要加 models/)
+            try:
+                model = genai.GenerativeModel("models/gemini-1.5-flash")
+                # 重試一次... (後面邏輯相同)
+                st.info("🔄 正在嘗試備用路徑...")
+                if uploaded_file:
+                    img = Image.open(uploaded_file)
+                    response = model.generate_content([prompt, img])
+                else:
+                    response = model.generate_content(prompt)
+                st.success("✅ 備用路徑連結成功！")
+                st.write(response.text)
+            except:
+                st.error(f"❌ 終極錯誤：{e}")
